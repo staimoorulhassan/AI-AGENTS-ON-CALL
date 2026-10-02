@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getRuntimeConfig, hasRequiredVapiEnv, maskAssistantId } from '@/lib/env';
@@ -6,18 +8,18 @@ import { callerIdSchema, destinationSchema } from '@/lib/validation';
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const destinationResult = destinationSchema.safeParse(body.destination);
+  const destinationResult = destinationSchema.safeParse(body?.destination);
   if (!destinationResult.success) {
     return NextResponse.json(
-      { error: destinationResult.error.issues[0]?.message ?? 'Invalid destination' },
+      { error: destinationResult.error.issues?.[0]?.message ?? 'Invalid destination' },
       { status: 400 },
     );
   }
 
-  const callerIdResult = callerIdSchema.safeParse(body.callerId ?? '');
+  const callerIdResult = callerIdSchema.safeParse(body?.callerId ?? '');
   if (!callerIdResult.success) {
     return NextResponse.json(
-      { error: callerIdResult.error.issues[0]?.message ?? 'Invalid caller ID' },
+      { error: callerIdResult.error.issues?.[0]?.message ?? 'Invalid caller ID' },
       { status: 400 },
     );
   }

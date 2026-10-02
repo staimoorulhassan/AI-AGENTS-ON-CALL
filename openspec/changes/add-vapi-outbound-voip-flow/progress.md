@@ -1,30 +1,17 @@
 # Progress — add-vapi-outbound-voip-flow
 
-## 2026-10-02
-- Initialized OpenSpec change scaffold.
-- Added proposal, tasks, and spec deltas for:
-  - outbound calling setup
-  - VAPI AI integration
-  - call transfer
-  - security and credential handling
-- Added repository environment templates and documentation stubs.
+## Status: DEPLOYED ✅
 
-## 2026-10-02 (implementation)
-- Implemented a working Next.js + TypeScript web application in the repository root.
-- Added API/service layer routes:
-  - `GET /api/config/status`
-  - `POST /api/calls/start`
-  - `POST /api/calls/transfer`
-  - `GET /api/transfers/audit`
-- Implemented environment-based config loading for SIP and VAPI credentials.
-- Enforced default SIP server fallback: `sip.suii.us:5060`.
-- Enforced blank-by-default Caller ID behavior in the UI.
-- Added validation for destination and caller-id fields.
-- Implemented blind and attended transfer logic with persistent transfer audit trail.
-- Added runtime data store utilities and file-backed persistence under `data/*.json` (gitignored).
-- Updated README with setup/build/run docs and architecture flow.
-- Updated OpenSpec tasks to completed.
+### Completed
+- [x] Outbound calling setup (SIP server sip.suii.us:5060, blank Caller ID)
+- [x] VAPI AI integration (public/private key + assistant ID from env)
+- [x] Call transfer to human agents (blind/attended modes)
+- [x] Security & credential hygiene (env-only, gitignored .env)
+- [x] PostgreSQL database persistence (Prisma ORM)
+- [x] Deployed to https://ai-agents-on-call-deployed.abacusai.app
+- [x] GitHub repo synced: https://github.com/staimoorulhassan/AI-AGENTS-ON-CALL
 
-## Verification
-- Build/type check completed with `npm run build`.
-- Confirmed `.env` remains untracked and ignored by git.
+### Deployment
+- **Live URL**: https://ai-agents-on-call-deployed.abacusai.app
+- **Stack**: Next.js 16 + TypeScript + Prisma + PostgreSQL
+- **API Routes**: /api/config/status, /api/calls/start, /api/calls/transfer, /api/transfers/audit

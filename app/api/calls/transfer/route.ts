@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import {
@@ -9,20 +11,20 @@ import { destinationSchema, transferModeSchema } from '@/lib/validation';
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const callId = typeof body.callId === 'string' ? body.callId.trim() : '';
+  const callId = typeof body?.callId === 'string' ? body.callId.trim() : '';
   if (!callId) {
     return NextResponse.json({ error: 'callId is required' }, { status: 400 });
   }
 
-  const modeResult = transferModeSchema.safeParse(body.mode);
+  const modeResult = transferModeSchema.safeParse(body?.mode);
   if (!modeResult.success) {
     return NextResponse.json({ error: 'mode must be blind or attended' }, { status: 400 });
   }
 
-  const destinationResult = destinationSchema.safeParse(body.destination);
+  const destinationResult = destinationSchema.safeParse(body?.destination);
   if (!destinationResult.success) {
     return NextResponse.json(
-      { error: destinationResult.error.issues[0]?.message ?? 'Invalid destination' },
+      { error: destinationResult.error.issues?.[0]?.message ?? 'Invalid destination' },
       { status: 400 },
     );
   }

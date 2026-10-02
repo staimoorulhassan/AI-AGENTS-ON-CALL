@@ -1,0 +1,35 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/ai_agents_on_call/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model ActiveCall {
+  id              String   @id @default(uuid())
+  destination     String
+  callerId        String   @default("")
+  assistantId     String
+  startedAt       DateTime @default(now())
+  status          String   @default("active") // active | transferred
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+}
+
+model TransferAuditRecord {
+  id          String   @id @default(uuid())
+  callId      String
+  mode        String   // blind | attended
+  destination String
+  result      String   // success | failed
+  details     String
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([callId])
+}

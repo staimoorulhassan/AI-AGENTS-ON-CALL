@@ -48,27 +48,30 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
 
   async function loadState() {
-    const [statusRes, auditRes] = await Promise.all([
-      fetch('/api/config/status', { cache: 'no-store' }),
-      fetch('/api/transfers/audit', { cache: 'no-store' }),
-    ]);
+    try {
+      const [statusRes, auditRes] = await Promise.all([
+        fetch('/api/config/status', { cache: 'no-store' }),
+        fetch('/api/transfers/audit', { cache: 'no-store' }),
+      ]);
 
-    if (statusRes.ok) {
-      const cfg = (await statusRes.json()) as StatusResponse;
-      setStatus(cfg);
-      // Explicit requirement: default remains blank and user initialized only.
-      setCallerId('');
-    }
+      if (statusRes?.ok) {
+        const cfg = (await statusRes.json()) as StatusResponse;
+        setStatus(cfg);
+        setCallerId('');
+      }
 
-    if (auditRes.ok) {
-      const payload = (await auditRes.json()) as {
-        audit: TransferAudit[];
-        activeCalls: ActiveCall[];
-      };
-      setAudit(payload.audit);
-      setActiveCalls(payload.activeCalls);
-      const firstActive = payload.activeCalls.find((c) => c.status === 'active');
-      setCallId(firstActive?.id ?? '');
+      if (auditRes?.ok) {
+        const payload = (await auditRes.json()) as {
+          audit: TransferAudit[];
+          activeCalls: ActiveCall[];
+        };
+        setAudit(payload?.audit ?? []);
+        setActiveCalls(payload?.activeCalls ?? []);
+        const firstActive = (payload?.activeCalls ?? []).find((c: any) => c?.status === 'active');
+        setCallId(firstActive?.id ?? '');
+      }
+    } catch (err) {
+      console.error('Failed to load state:', err);
     }
   }
 
@@ -77,7 +80,7 @@ export default function HomePage() {
   }, []);
 
   const activeCallOptions = useMemo(
-    () => activeCalls.filter((c) => c.status === 'active'),
+    () => (activeCalls ?? []).filter((c: any) => c?.status === 'active'),
     [activeCalls],
   );
 
@@ -92,16 +95,18 @@ export default function HomePage() {
         body: JSON.stringify({ destination, callerId }),
       });
       const payload = await response.json();
-      if (!response.ok) {
-        setMessage({ info: '', error: payload.error ?? 'Unable to start call' });
+      if (!response?.ok) {
+        setMessage({ info: '', error: payload?.error ?? 'Unable to start call' });
         return;
       }
       setMessage({
-        info: `Call ${payload.call.id} started with assistant ${payload.call.assistantId}`,
+        info: `Call ${payload?.call?.id ?? 'unknown'} started with assistant ${payload?.call?.assistantId ?? 'unknown'}`,
         error: '',
       });
       setDestination('');
       await loadState();
+    } catch (err: any) {
+      setMessage({ info: '', error: err?.message ?? 'Network error' });
     } finally {
       setLoading(false);
     }
@@ -118,16 +123,18 @@ export default function HomePage() {
         body: JSON.stringify({ callId, mode: transferMode, destination: transferDestination }),
       });
       const payload = await response.json();
-      if (!response.ok) {
-        setMessage({ info: '', error: payload.error ?? 'Unable to transfer call' });
+      if (!response?.ok) {
+        setMessage({ info: '', error: payload?.error ?? 'Unable to transfer call' });
         return;
       }
       setMessage({
-        info: `Transfer ${payload.transfer.id} completed (${payload.transfer.mode})`,
+        info: `Transfer ${payload?.transfer?.id ?? 'unknown'} completed (${payload?.transfer?.mode ?? transferMode})`,
         error: '',
       });
       setTransferDestination('');
       await loadState();
+    } catch (err: any) {
+      setMessage({ info: '', error: err?.message ?? 'Network error' });
     } finally {
       setLoading(false);
     }
@@ -135,13 +142,13 @@ export default function HomePage() {
 
   return (
     <main className="container">
-      <h1>AI Agents On Call</h1>
-      <p className="muted">
+      <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: 4 }}>AI Agents On Call</h1>
+      <p className="muted" style={{ marginBottom: 20 }}>
         Outbound VoIP dialer with VAPI AI handoff and human transfer controls.
       </p>
 
       <section className="card">
-        <h2>Outbound Calling Setup</h2>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Outbound Calling Setup</h2>
         <div className="grid">
           <div>
             <label>SIP server</label>
@@ -150,17 +157,17 @@ export default function HomePage() {
           </div>
           <div>
             <label>SIP_USERNAME configured</label>
-            <input value={status?.envStatus.sipUsernameConfigured ? 'Yes' : 'No'} readOnly />
+            <input value={status?.envStatus?.sipUsernameConfigured ? 'Yes' : 'No'} readOnly />
           </div>
           <div>
             <label>SIP_PASSWORD configured</label>
-            <input value={status?.envStatus.sipPasswordConfigured ? 'Yes' : 'No'} readOnly />
+            <input value={status?.envStatus?.sipPasswordConfigured ? 'Yes' : 'No'} readOnly />
           </div>
           <div>
             <label>Caller ID (blank by default)</label>
             <input
               value={callerId}
-              onChange={(e) => setCallerId(e.target.value)}
+              onChange={(e: any) => setCallerId(e?.target?.value ?? '')}
               placeholder="Leave blank unless user sets one"
             />
           </div>
@@ -168,25 +175,23 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h2>VAPI AI Integration</h2>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>VAPI AI Integration</h2>
         <div className="grid">
           <div>
             <label>VAPI env readiness</label>
-            <input value={status?.envStatus.vapiReady ? 'Ready' : 'Missing env keys'} readOnly />
+            <input value={status?.envStatus?.vapiReady ? 'Ready' : 'Missing env keys'} readOnly />
           </div>
           <div>
             <label>Assistant ID from env</label>
             <input
-              value={
-                status?.assistantIdPreview || 'Not configured'
-              }
+              value={status?.assistantIdPreview || 'Not configured'}
               readOnly
             />
           </div>
           <div>
             <label>Assistant selected</label>
             <input
-              value={status?.envStatus.assistantIdConfigured ? 'Yes (VAPI_ASSISTANT_ID)' : 'No'}
+              value={status?.envStatus?.assistantIdConfigured ? 'Yes (VAPI_ASSISTANT_ID)' : 'No'}
               readOnly
             />
           </div>
@@ -194,14 +199,14 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h2>Start AI-handled Outbound Call</h2>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Start AI-handled Outbound Call</h2>
         <form onSubmit={startCall}>
           <div className="grid">
             <div>
               <label>Destination number</label>
               <input
                 value={destination}
-                onChange={(e) => setDestination(e.target.value)}
+                onChange={(e: any) => setDestination(e?.target?.value ?? '')}
                 placeholder="+15551234567"
                 required
               />
@@ -214,16 +219,16 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h2>Transfer to Human Agent</h2>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Transfer to Human Agent</h2>
         <form onSubmit={transferCall}>
           <div className="grid">
             <div>
               <label>Active call</label>
-              <select value={callId} onChange={(e) => setCallId(e.target.value)} required>
+              <select value={callId} onChange={(e: any) => setCallId(e?.target?.value ?? '')} required>
                 <option value="">Select active call</option>
-                {activeCallOptions.map((call) => (
-                  <option key={call.id} value={call.id}>
-                    {call.id.slice(0, 8)}… → {call.destination}
+                {(activeCallOptions ?? []).map((call: any) => (
+                  <option key={call?.id} value={call?.id}>
+                    {(call?.id ?? '').slice(0, 8)}… → {call?.destination ?? ''}
                   </option>
                 ))}
               </select>
@@ -232,7 +237,7 @@ export default function HomePage() {
               <label>Transfer mode</label>
               <select
                 value={transferMode}
-                onChange={(e) => setTransferMode(e.target.value as 'blind' | 'attended')}
+                onChange={(e: any) => setTransferMode((e?.target?.value ?? 'blind') as 'blind' | 'attended')}
               >
                 <option value="blind">Blind</option>
                 <option value="attended">Attended</option>
@@ -242,7 +247,7 @@ export default function HomePage() {
               <label>Human destination</label>
               <input
                 value={transferDestination}
-                onChange={(e) => setTransferDestination(e.target.value)}
+                onChange={(e: any) => setTransferDestination(e?.target?.value ?? '')}
                 placeholder="+15557654321"
                 required
               />
@@ -255,8 +260,8 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h2>Transfer audit</h2>
-        {audit.length === 0 ? (
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Transfer audit</h2>
+        {(audit?.length ?? 0) === 0 ? (
           <p className="muted">No transfer records yet.</p>
         ) : (
           <table>
@@ -270,13 +275,13 @@ export default function HomePage() {
               </tr>
             </thead>
             <tbody>
-              {audit.map((record) => (
-                <tr key={record.id}>
-                  <td>{new Date(record.timestamp).toLocaleString()}</td>
-                  <td>{record.callId.slice(0, 8)}…</td>
-                  <td>{record.mode}</td>
-                  <td>{record.destination}</td>
-                  <td>{record.result}</td>
+              {(audit ?? []).map((record: any) => (
+                <tr key={record?.id}>
+                  <td suppressHydrationWarning>{new Date(record?.timestamp ?? '').toLocaleString('en-US', { timeZone: 'UTC' })}</td>
+                  <td>{(record?.callId ?? '').slice(0, 8)}…</td>
+                  <td>{record?.mode ?? ''}</td>
+                  <td>{record?.destination ?? ''}</td>
+                  <td>{record?.result ?? ''}</td>
                 </tr>
               ))}
             </tbody>
@@ -284,8 +289,8 @@ export default function HomePage() {
         )}
       </section>
 
-      {message.info ? <div className="notice">{message.info}</div> : null}
-      {message.error ? <div className="error">{message.error}</div> : null}
+      {message?.info ? <div className="notice">{message.info}</div> : null}
+      {message?.error ? <div className="error">{message.error}</div> : null}
     </main>
   );
 }
