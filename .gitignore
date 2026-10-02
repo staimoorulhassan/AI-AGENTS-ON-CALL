@@ -17,8 +17,12 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+.next/
 .tmp/
 tmp/
+
+# Runtime state
+data/*.json
 
 # OS/editor
 .DS_Store

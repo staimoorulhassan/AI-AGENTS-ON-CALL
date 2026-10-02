@@ -1,47 +1,54 @@
 # AI-AGENTS-ON-CALL
 
-Spec-driven scaffold for an outbound VoIP calling platform where pre-configured Vapi AI agents handle calls and can transfer to human agents.
+Outbound VoIP control panel with VAPI AI call handling and human transfer workflows, implemented from the OpenSpec change `add-vapi-outbound-voip-flow`.
 
-## Spec Kit Choice
+## Stack
 
-This project uses **OpenSpec** as the framework.
+- **Next.js 16** (App Router)
+- **React 19**
+- **TypeScript**
+- API route handlers under `app/api/*` as the service layer
+- Lightweight file-backed runtime state for active calls and transfer audit (`data/*.json`)
 
-Why OpenSpec was selected:
-- It is the better-known spec-driven framework and matches the requested preference.
-- It provides a clear, lightweight change workflow with `proposal.md`, `tasks.md`, and per-capability `spec.md` files under `openspec/changes/`.
-- It is a strong fit for feature-by-feature planning before implementation code exists.
+## Implemented OpenSpec change
 
-## Project Structure
+The following capability specs are implemented:
 
-```text
-AI-AGENTS-ON-CALL/
-├─ .env                  # local runtime secrets (gitignored)
-├─ .env.example          # placeholder values only
-├─ .gitignore
-├─ README.md
-└─ openspec/
-   ├─ README.md
-   └─ changes/
-      └─ add-vapi-outbound-voip-flow/
-         ├─ proposal.md
-         ├─ tasks.md
-         ├─ progress.md
-         └─ specs/
-            ├─ outbound-calling-setup/spec.md
-            ├─ vapi-ai-integration/spec.md
-            ├─ call-transfer/spec.md
-            └─ security-credentials/spec.md
-```
+- `specs/outbound-calling-setup/spec.md`
+- `specs/vapi-ai-integration/spec.md`
+- `specs/call-transfer/spec.md`
+- `specs/security-credentials/spec.md`
 
-## Environment Configuration
+### Feature mapping
 
-Copy the template and fill values in your local `.env`:
+1. **Outbound Calling Setup**
+   - Defaults SIP server to `sip.suii.us:5060` when `SIP_SERVER` is not set.
+   - Reads `SIP_USERNAME` and `SIP_PASSWORD` from environment variables.
+   - Caller ID input is **blank by default** and only set by user input.
+
+2. **VAPI AI Integration**
+   - Reads VAPI credentials from environment (`VAPI_PUBLIC_KEY`, `VAPI_PRIVATE_KEY`, `VAPI_ASSISTANT_ID`, `VAPI_CLI_KEY`).
+   - Outbound call start uses the assistant defined by `VAPI_ASSISTANT_ID`.
+   - API responses do not expose raw key values.
+
+3. **Human Agent Transfer**
+   - Supports **blind** and **attended** transfer modes.
+   - Transfer attempts are persisted to audit records with timestamp, mode, destination, call id, and result.
+
+4. **Security / Credentials**
+   - `.env` is gitignored.
+   - `.env.example` contains placeholders only.
+   - No real credential values are committed in source or docs.
+
+## Environment configuration
+
+Create your local environment file from the template:
 
 ```bash
 cp .env.example .env
 ```
 
-Template keys:
+`.env.example` keys:
 
 ```env
 VAPI_PRIVATE_KEY=<your-vapi-private-key>
@@ -54,36 +61,59 @@ SIP_PASSWORD=<your-sip-password>
 CALLER_ID=
 ```
 
-### Security Rules
-- Never commit `.env`.
-- Keep real credentials out of source code and docs.
-- Use placeholder values in `.env.example` only.
-- Caller ID starts blank by default and must be explicitly set by the user.
+> `CALLER_ID` remains blank by default. The UI does not auto-fill it.
 
-## Outbound Calling + Transfer Flow
+## Run locally
 
-1. Load SIP config (`SIP_SERVER`, `SIP_USERNAME`, `SIP_PASSWORD`) from environment.
-2. Start outbound call leg through SIP provider (`sip.suii.us:5060` by default).
-3. Hand call control to the pre-configured Vapi assistant identified by `VAPI_ASSISTANT_ID`.
-4. Continue AI-led conversation.
-5. If escalation is required, transfer to a human agent:
-   - **Blind transfer**: immediate handoff.
-   - **Attended transfer**: human leg is connected first, then bridged.
-6. Record transfer mode and outcome for auditability.
+```bash
+npm install
+npm run dev
+```
 
-## Working with OpenSpec in this Repo
+Open `http://localhost:3000`.
 
-Use the active change at:
+> This localhost refers to the machine running this project.
+
+## Build
+
+```bash
+npm run build
+npm run start
+```
+
+## API/service layer
+
+- `GET /api/config/status`
+  - Returns SIP server, caller-id default state, and env readiness flags (without secrets).
+- `POST /api/calls/start`
+  - Starts an outbound AI-handled call using destination + optional user-supplied caller ID.
+- `POST /api/calls/transfer`
+  - Transfers a live call in `blind` or `attended` mode.
+- `GET /api/transfers/audit`
+  - Returns active calls and transfer audit trail.
+
+## Outbound → AI → transfer flow
+
+1. Load env config.
+2. Validate destination and optional caller ID.
+3. Start outbound call using SIP provider settings.
+4. Bind call to the preconfigured VAPI assistant (`VAPI_ASSISTANT_ID`).
+5. On escalation, transfer to human agent with selected mode:
+   - **Blind**: immediate redirect.
+   - **Attended**: establish human leg, then bridge.
+6. Persist transfer audit event.
+
+## OpenSpec artifacts
+
+Current change folder:
 
 - `openspec/changes/add-vapi-outbound-voip-flow/`
 
-Recommended progression:
-1. Refine `proposal.md` if scope changes.
-2. Keep requirements in `specs/*/spec.md` as the source of truth.
-3. Move implementation steps through `tasks.md`.
-4. Update `progress.md` as work advances.
+Artifacts:
 
-## Notes
+- `proposal.md`
+- `tasks.md`
+- `progress.md`
+- `specs/*/spec.md`
 
-- This repository currently contains the spec scaffold and environment templates, not full runtime code.
-- The specs are intentionally implementation-agnostic so backend/telephony stacks can be chosen later.
+These remain the source of truth for evolution of this feature.
