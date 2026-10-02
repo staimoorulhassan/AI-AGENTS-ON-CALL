@@ -5,13 +5,12 @@ import { NextResponse } from 'next/server';
 import {
   appendTransferAudit,
   getActiveCallById,
-  markCallHandledByHuman,
+  markCallEnded,
 } from '@/lib/store';
 
 /**
- * Dashboard takeover: the AI assistant leaves the call and the SAME call is
- * handed to the human agent working in the dashboard. The call is NOT dialed
- * out or transferred to any external number — only the handler changes.
+ * End the current call. Available to the agent once they are handling the call
+ * on the dashboard (or for an AI-handled call that should be wrapped up).
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -21,27 +20,29 @@ export async function POST(request: Request) {
   }
 
   const call = await getActiveCallById(callId);
-  if (!call || call.status !== 'active') {
+  if (!call || call.status === 'ended') {
     return NextResponse.json(
-      { error: 'No AI-handled active call found to take over' },
+      { error: 'No live call found to end' },
       { status: 404 },
     );
   }
 
-  await markCallHandledByHuman(callId);
+  await markCallEnded(callId);
   const audit = await appendTransferAudit({
     id: randomUUID(),
     callId,
-    mode: 'takeover',
+    mode: 'end',
     destination: 'dashboard',
     result: 'success',
     details:
-      'AI assistant left the call; the same call is now handled by the agent on the dashboard.',
+      call.status === 'human'
+        ? 'Agent ended the call from the dashboard.'
+        : 'AI-handled call ended.',
     timestamp: new Date().toISOString(),
   });
 
   return NextResponse.json({
-    message: 'Call taken over by dashboard agent',
+    message: 'Call ended',
     transfer: audit,
   });
 }

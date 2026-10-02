@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 type StatusResponse = {
   sipServer: string;
@@ -14,19 +14,21 @@ type StatusResponse = {
   assistantIdPreview: string;
 };
 
+type CallStatus = 'active' | 'human' | 'ended';
+
 type ActiveCall = {
   id: string;
   destination: string;
   callerId: string;
   assistantIdPreview: string;
   startedAt: string;
-  status: 'active' | 'transferred';
+  status: CallStatus;
 };
 
 type TransferAudit = {
   id: string;
   callId: string;
-  mode: 'blind' | 'attended';
+  mode: string;
   destination: string;
   result: 'success' | 'failed';
   details: string;
@@ -35,17 +37,21 @@ type TransferAudit = {
 
 const emptyMessage = { info: '', error: '' };
 
+function handlerLabel(status: CallStatus) {
+  if (status === 'active') return 'AI assistant';
+  if (status === 'human') return 'Agent (you)';
+  return 'Ended';
+}
+
 export default function HomePage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [callerId, setCallerId] = useState('');
   const [destination, setDestination] = useState('');
-  const [callId, setCallId] = useState('');
-  const [transferDestination, setTransferDestination] = useState('');
-  const [transferMode, setTransferMode] = useState<'blind' | 'attended'>('blind');
   const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([]);
   const [audit, setAudit] = useState<TransferAudit[]>([]);
   const [message, setMessage] = useState(emptyMessage);
   const [loading, setLoading] = useState(false);
+  const [busyCallId, setBusyCallId] = useState('');
 
   async function loadState() {
     try {
@@ -67,8 +73,6 @@ export default function HomePage() {
         };
         setAudit(payload?.audit ?? []);
         setActiveCalls(payload?.activeCalls ?? []);
-        const firstActive = (payload?.activeCalls ?? []).find((c: any) => c?.status === 'active');
-        setCallId(firstActive?.id ?? '');
       }
     } catch (err) {
       console.error('Failed to load state:', err);
@@ -79,10 +83,7 @@ export default function HomePage() {
     void loadState();
   }, []);
 
-  const activeCallOptions = useMemo(
-    () => (activeCalls ?? []).filter((c: any) => c?.status === 'active'),
-    [activeCalls],
-  );
+  const liveCalls = (activeCalls ?? []).filter((c: any) => c?.status !== 'ended');
 
   async function startCall(event: FormEvent) {
     event.preventDefault();
@@ -100,7 +101,7 @@ export default function HomePage() {
         return;
       }
       setMessage({
-        info: `Call ${payload?.call?.id ?? 'unknown'} started with assistant ${payload?.call?.assistantId ?? 'unknown'}`,
+        info: `Call ${payload?.call?.id ?? 'unknown'} started — handled by the AI assistant.`,
         error: '',
       });
       setDestination('');
@@ -112,31 +113,52 @@ export default function HomePage() {
     }
   }
 
-  async function transferCall(event: FormEvent) {
-    event.preventDefault();
-    setLoading(true);
+  async function takeOverCall(callId: string) {
+    setBusyCallId(callId);
     setMessage(emptyMessage);
     try {
       const response = await fetch('/api/calls/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId, mode: transferMode, destination: transferDestination }),
+        body: JSON.stringify({ callId }),
       });
       const payload = await response.json();
       if (!response?.ok) {
-        setMessage({ info: '', error: payload?.error ?? 'Unable to transfer call' });
+        setMessage({ info: '', error: payload?.error ?? 'Unable to take over call' });
         return;
       }
       setMessage({
-        info: `Transfer ${payload?.transfer?.id ?? 'unknown'} completed (${payload?.transfer?.mode ?? transferMode})`,
+        info: 'You are now handling this call. The AI assistant has left — same call, no number change.',
         error: '',
       });
-      setTransferDestination('');
       await loadState();
     } catch (err: any) {
       setMessage({ info: '', error: err?.message ?? 'Network error' });
     } finally {
-      setLoading(false);
+      setBusyCallId('');
+    }
+  }
+
+  async function endCall(callId: string) {
+    setBusyCallId(callId);
+    setMessage(emptyMessage);
+    try {
+      const response = await fetch('/api/calls/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId }),
+      });
+      const payload = await response.json();
+      if (!response?.ok) {
+        setMessage({ info: '', error: payload?.error ?? 'Unable to end call' });
+        return;
+      }
+      setMessage({ info: 'Call ended.', error: '' });
+      await loadState();
+    } catch (err: any) {
+      setMessage({ info: '', error: err?.message ?? 'Network error' });
+    } finally {
+      setBusyCallId('');
     }
   }
 
@@ -144,7 +166,8 @@ export default function HomePage() {
     <main className="container">
       <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: 4 }}>AI Agents On Call</h1>
       <p className="muted" style={{ marginBottom: 20 }}>
-        Outbound VoIP dialer with VAPI AI handoff and human transfer controls.
+        Outbound VoIP dialer. Calls start with the VAPI AI assistant; an agent can take over the
+        same call from the dashboard at any time.
       </p>
 
       <section className="card">
@@ -183,10 +206,7 @@ export default function HomePage() {
           </div>
           <div>
             <label>Assistant ID from env</label>
-            <input
-              value={status?.assistantIdPreview || 'Not configured'}
-              readOnly
-            />
+            <input value={status?.assistantIdPreview || 'Not configured'} readOnly />
           </div>
           <div>
             <label>Assistant selected</label>
@@ -219,69 +239,87 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Transfer to Human Agent</h2>
-        <form onSubmit={transferCall}>
-          <div className="grid">
-            <div>
-              <label>Active call</label>
-              <select value={callId} onChange={(e: any) => setCallId(e?.target?.value ?? '')} required>
-                <option value="">Select active call</option>
-                {(activeCallOptions ?? []).map((call: any) => (
-                  <option key={call?.id} value={call?.id}>
-                    {(call?.id ?? '').slice(0, 8)}… → {call?.destination ?? ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label>Transfer mode</label>
-              <select
-                value={transferMode}
-                onChange={(e: any) => setTransferMode((e?.target?.value ?? 'blind') as 'blind' | 'attended')}
-              >
-                <option value="blind">Blind</option>
-                <option value="attended">Attended</option>
-              </select>
-            </div>
-            <div>
-              <label>Human destination</label>
-              <input
-                value={transferDestination}
-                onChange={(e: any) => setTransferDestination(e?.target?.value ?? '')}
-                placeholder="+15557654321"
-                required
-              />
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <button disabled={loading}>Transfer call</button>
-          </div>
-        </form>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 4 }}>Live Calls</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Take over a call to have the AI leave and handle the same call yourself. The call is never
+          transferred to another number.
+        </p>
+        {liveCalls.length === 0 ? (
+          <p className="muted">No live calls. Start an outbound call above.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Destination</th>
+                <th>Handled by</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveCalls.map((call: any) => (
+                <tr key={call?.id}>
+                  <td suppressHydrationWarning>
+                    {new Date(call?.startedAt ?? '').toLocaleString('en-US', { timeZone: 'UTC' })}
+                  </td>
+                  <td>{call?.destination ?? ''}</td>
+                  <td>
+                    <span className={call?.status === 'human' ? 'badge badge-human' : 'badge badge-ai'}>
+                      {handlerLabel(call?.status)}
+                    </span>
+                  </td>
+                  <td>
+                    {call?.status === 'active' ? (
+                      <button
+                        type="button"
+                        onClick={() => takeOverCall(call?.id)}
+                        disabled={busyCallId === call?.id}
+                      >
+                        Take over call
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => endCall(call?.id)}
+                      disabled={busyCallId === call?.id}
+                      style={{ marginLeft: call?.status === 'active' ? 8 : 0 }}
+                    >
+                      End call
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="card">
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Transfer audit</h2>
+        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 12 }}>Handoff log</h2>
         {(audit?.length ?? 0) === 0 ? (
-          <p className="muted">No transfer records yet.</p>
+          <p className="muted">No handoff records yet.</p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Time</th>
                 <th>Call ID</th>
-                <th>Mode</th>
-                <th>Destination</th>
+                <th>Action</th>
                 <th>Result</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
               {(audit ?? []).map((record: any) => (
                 <tr key={record?.id}>
-                  <td suppressHydrationWarning>{new Date(record?.timestamp ?? '').toLocaleString('en-US', { timeZone: 'UTC' })}</td>
+                  <td suppressHydrationWarning>
+                    {new Date(record?.timestamp ?? '').toLocaleString('en-US', { timeZone: 'UTC' })}
+                  </td>
                   <td>{(record?.callId ?? '').slice(0, 8)}…</td>
-                  <td>{record?.mode ?? ''}</td>
-                  <td>{record?.destination ?? ''}</td>
+                  <td>{record?.mode === 'end' ? 'Call ended' : 'Agent takeover'}</td>
                   <td>{record?.result ?? ''}</td>
+                  <td className="muted">{record?.details ?? ''}</td>
                 </tr>
               ))}
             </tbody>

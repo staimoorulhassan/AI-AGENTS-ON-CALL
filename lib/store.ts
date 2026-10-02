@@ -6,13 +6,13 @@ export interface ActiveCallData {
   callerId: string;
   assistantId: string;
   startedAt: string;
-  status: 'active' | 'transferred';
+  status: 'active' | 'human' | 'ended';
 }
 
 export interface TransferAuditData {
   id: string;
   callId: string;
-  mode: 'blind' | 'attended';
+  mode: string;
   destination: string;
   result: 'success' | 'failed';
   details: string;
@@ -29,7 +29,7 @@ export async function listActiveCalls(): Promise<ActiveCallData[]> {
     callerId: c.callerId,
     assistantId: c.assistantId,
     startedAt: c.startedAt.toISOString(),
-    status: c.status as 'active' | 'transferred',
+    status: c.status as 'active' | 'human' | 'ended',
   }));
 }
 
@@ -47,12 +47,12 @@ export async function saveActiveCall(call: ActiveCallData) {
   return call;
 }
 
-export async function markCallTransferred(callId: string) {
+async function setCallStatus(callId: string, status: 'active' | 'human' | 'ended') {
   const existing = await prisma.activeCall.findUnique({ where: { id: callId } });
   if (!existing) return null;
   const updated = await prisma.activeCall.update({
     where: { id: callId },
-    data: { status: 'transferred' },
+    data: { status },
   });
   return {
     id: updated.id,
@@ -60,8 +60,16 @@ export async function markCallTransferred(callId: string) {
     callerId: updated.callerId,
     assistantId: updated.assistantId,
     startedAt: updated.startedAt.toISOString(),
-    status: updated.status as 'active' | 'transferred',
+    status: updated.status as 'active' | 'human' | 'ended',
   };
+}
+
+export async function markCallHandledByHuman(callId: string) {
+  return setCallStatus(callId, 'human');
+}
+
+export async function markCallEnded(callId: string) {
+  return setCallStatus(callId, 'ended');
 }
 
 export async function getActiveCallById(callId: string): Promise<ActiveCallData | null> {
@@ -73,7 +81,7 @@ export async function getActiveCallById(callId: string): Promise<ActiveCallData 
     callerId: call.callerId,
     assistantId: call.assistantId,
     startedAt: call.startedAt.toISOString(),
-    status: call.status as 'active' | 'transferred',
+    status: call.status as 'active' | 'human' | 'ended',
   };
 }
 
@@ -84,7 +92,7 @@ export async function listTransferAudit(): Promise<TransferAuditData[]> {
   return records.map((r: any) => ({
     id: r.id,
     callId: r.callId,
-    mode: r.mode as 'blind' | 'attended',
+    mode: r.mode as string,
     destination: r.destination,
     result: r.result as 'success' | 'failed',
     details: r.details,

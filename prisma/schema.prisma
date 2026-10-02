@@ -15,7 +15,7 @@ model ActiveCall {
   callerId        String   @default("")
   assistantId     String
   startedAt       DateTime @default(now())
-  status          String   @default("active") // active | transferred
+  status          String   @default("active") // active (AI) | human (agent on dashboard) | ended
   createdAt       DateTime @default(now())
 
   @@index([status])
@@ -24,8 +24,8 @@ model ActiveCall {
 model TransferAuditRecord {
   id          String   @id @default(uuid())
   callId      String
-  mode        String   // blind | attended
-  destination String
+  mode        String   @default("takeover") // takeover | end
+  destination String   @default("dashboard")
   result      String   // success | failed
   details     String
   timestamp   DateTime @default(now())
